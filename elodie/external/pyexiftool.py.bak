@@ -325,8 +325,6 @@ class ExifTool(object, with_metaclass(Singleton)):
                 return json.loads(self.execute(b"-j", *params).decode("latin-1"))
             except UnicodeDecodeError as e:
                 # sys.stderr.write("An exception occurred: ", e) 
-                logging.critical(params)  # log exception info at CRITICAL log level                
-
                 logging.critical(e, exc_info=True)  # log exception info at CRITICAL log level                
                 return
             except Exception as e:

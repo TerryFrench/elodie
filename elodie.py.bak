@@ -41,8 +41,6 @@ def import_file(_file, destination, album_from_folder, trash, allow_duplicates):
     _file = _decode(_file)
     destination = _decode(destination)
 
-
-    log.all('Processing file (%s)' % _file)
     """Set file metadata and move it to destination.
     """
     if not os.path.exists(_file):

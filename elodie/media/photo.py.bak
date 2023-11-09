@@ -90,13 +90,13 @@ class Photo(Media):
                 # time.mktime failed due to the time being before epoch time 
                 log.error("overflow error for time.mktime out of range")
                 log.error(e)
-                return None
+                return time_tuple
  
             except ArgumentOutOfRangeException  as e:
                 # time.mktime failed due to the time being before epoch time 
                 log.error("argument for time.mktime out of range")
                 log.error(e)
-                return None
+                return time_tuple
                 
             except BaseException as e:
                 log.error(e)
