@@ -6,7 +6,9 @@
   "dependencies": {
     "menubar": "^2.3.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@electron/packager": "^18.3.6"
+  },
   "scripts": {
     "test": "electron app.js"
   },

@@ -41,6 +41,8 @@ def import_file(_file, destination, album_from_folder, trash, allow_duplicates, 
     _file = _decode(_file)
     destination = _decode(destination)
 
+
+    log.all('Processing file (%s)' % _file)
     """Set file metadata and move it to destination.
     """
     if not os.path.exists(_file):
@@ -212,7 +214,7 @@ def _verify(debug):
     for checksum, file_path in db.all():
         if not os.path.isfile(file_path):
             result.append((file_path, False))
-            log.progress('x')
+            log.progress('f')
             continue
 
         actual_checksum = db.checksum(file_path)
@@ -221,7 +223,7 @@ def _verify(debug):
             log.progress()
         else:
             result.append((file_path, False))
-            log.progress('x')
+            log.progress('c')
 
     log.progress('', True)
     result.write()

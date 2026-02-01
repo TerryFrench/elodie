@@ -329,7 +329,24 @@ class ExifTool(object, with_metaclass(Singleton)):
         try:
             return json.loads(self.execute(b"-j", *params).decode("utf-8"))
         except UnicodeDecodeError as e:
-            return json.loads(self.execute(b"-j", *params).decode("latin-1"))
+            try: 
+                return json.loads(self.execute(b"-j", *params).decode("latin-1"))
+            except UnicodeDecodeError as e:
+                # sys.stderr.write("An exception occurred: ", e) 
+                logging.critical(params)  # log exception info at CRITICAL log level                
+
+                logging.critical(e, exc_info=True)  # log exception info at CRITICAL log level                
+                return
+            except Exception as e:
+                # sys.stderr.write("An exception occurred: ", e) 
+                logging.critical(e, exc_info=True)  # log exception info at CRITICAL log level                
+                return
+        except Exception as e:
+            # Handle the exception
+            logging.critical(e, exc_info=True)  # log exception info at CRITICAL log level                
+            # sys.stderr.write("An exception occurred: ", e) 
+            # raise ValueError("Other Exception happened")
+            return
 
     def get_metadata_batch(self, filenames):
         """Return all meta-data for the given files.

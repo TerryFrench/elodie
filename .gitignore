@@ -7,6 +7,8 @@
 dist/**
 docs/_build
 build/**
+Elodie-win32-x64/**
+virtual_elodie_27/**
 **/*.arw
 **/*.dng
 **/*.nef

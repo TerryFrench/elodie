@@ -655,12 +655,15 @@ class FileSystem(object):
             )
 
             if not constants.dry_run:
+                #TODO Handle the case with DateTaken being before epoch
                 os.utime(file_path, (time.time(), time.mktime(date_taken)))
             else:
                 print(f"[DRY-RUN] Would set utime from date pattern for: {file_path}")
         else:
             # We don't make any assumptions about time zones and
             # assume local time zone.
+            
+            #TODO Handle the case with DateTaken being before epoch
             date_taken_in_seconds = time.mktime(date_taken)
             if not constants.dry_run:
                 os.utime(file_path, (time.time(), (date_taken_in_seconds)))

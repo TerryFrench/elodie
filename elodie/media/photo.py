@@ -73,8 +73,26 @@ class Photo(Media):
                         dt_list = dt_list + compile(r'-|:').split(tm)
                         dt_list = map(int, dt_list)
                         time_tuple = datetime(*dt_list).timetuple()
+                        
+                        #TODO Handle the case of photos with date set before epoch time. i.e. before 1970
+                        # seconds_since_epoch will be negative or invalid in some way. 
+                        # log.error("time tuple")
+                        # log.error(time_tuple)
+                        
                         seconds_since_epoch = time.mktime(time_tuple)
                         break
+            except OverflowError as e:
+                # time.mktime failed due to the time being before epoch time 
+                log.error("overflow error for time.mktime out of range")
+                log.error(e)
+                return None
+ 
+            except ArgumentOutOfRangeException  as e:
+                # time.mktime failed due to the time being before epoch time 
+                log.error("argument for time.mktime out of range")
+                log.error(e)
+                return None
+                
             except BaseException as e:
                 log.error(e)
                 pass
