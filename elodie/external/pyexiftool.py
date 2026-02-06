@@ -64,6 +64,7 @@ import json
 import warnings
 import logging
 import codecs
+import errno
 
 from future.utils import with_metaclass
 
@@ -71,6 +72,11 @@ try:        # Py3k compatibility
     basestring
 except NameError:
     basestring = (bytes, str)
+
+try:
+    BrokenPipeError
+except NameError:  # pragma: no cover (Python 2 compatibility)
+    BrokenPipeError = IOError
 
 executable = "exiftool"
 """The name of the executable to run.
@@ -225,6 +231,21 @@ class ExifTool(object, with_metaclass(Singleton)):
         
         self.running = False
 
+    def _is_pipe_io_error(self, error):
+        """Return True when the subprocess pipe is already closed/broken."""
+        if isinstance(error, BrokenPipeError):
+            return True
+
+        err_no = getattr(error, "errno", None)
+        if err_no in (errno.EPIPE, errno.EINVAL, 109):
+            return True
+
+        # "I/O operation on closed file" can surface as ValueError.
+        if isinstance(error, ValueError):
+            return "closed file" in str(error).lower()
+
+        return False
+
     def start(self):
         """Start an ``exiftool`` process in batch mode for this instance.
 
@@ -254,11 +275,26 @@ class ExifTool(object, with_metaclass(Singleton)):
         """
         if not self.running:
             return
-        self._process.stdin.write(b"-stay_open\nFalse\n")
-        self._process.stdin.flush()
-        self._process.communicate()
-        del self._process
-        self.running = False
+        try:
+            sent_terminate = False
+            if self._process.poll() is None:
+                try:
+                    self._process.stdin.write(b"-stay_open\nFalse\n")
+                    self._process.stdin.flush()
+                    sent_terminate = True
+                except (OSError, ValueError) as e:
+                    if not self._is_pipe_io_error(e):
+                        raise
+
+            if sent_terminate:
+                self._process.communicate()
+            elif self._process.poll() is None:
+                self._process.terminate()
+                self._process.communicate()
+        finally:
+            if hasattr(self, "_process"):
+                del self._process
+            self.running = False
 
     def __enter__(self):
         self.start()
@@ -291,12 +327,24 @@ class ExifTool(object, with_metaclass(Singleton)):
         """
         if not self.running:
             raise ValueError("ExifTool instance not running.")
-        self._process.stdin.write(b"\n".join(params + (b"-execute\n",)))
-        self._process.stdin.flush()
+        try:
+            self._process.stdin.write(b"\n".join(params + (b"-execute\n",)))
+            self._process.stdin.flush()
+        except (OSError, ValueError) as e:
+            if self._is_pipe_io_error(e):
+                self.running = False
+                return b""
+            raise
         output = b""
         fd = self._process.stdout.fileno()
-        while not output[-32:].strip().endswith(sentinel):
-            output += os.read(fd, block_size)
+        try:
+            while not output[-32:].strip().endswith(sentinel):
+                output += os.read(fd, block_size)
+        except OSError as e:
+            if self._is_pipe_io_error(e):
+                self.running = False
+                return b""
+            raise
         return output.strip()[:-len(sentinel)]
 
     def execute_json(self, *params):

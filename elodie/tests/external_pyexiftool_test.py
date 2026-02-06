@@ -95,3 +95,68 @@ def test_get_metadata_returns_none_when_execute_json_is_empty():
     with patch.object(et, 'execute_json', return_value=[]):
         result = et.get_metadata("/tmp/test.jpg")
         assert result is None
+
+def test_terminate_handles_broken_stdin_pipe():
+    class FakeStdin(object):
+        def write(self, data):
+            return len(data)
+
+        def flush(self):
+            raise OSError(22, "Invalid argument")
+
+    class FakeProcess(object):
+        def __init__(self):
+            self.stdin = FakeStdin()
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+        def communicate(self):
+            return (b"", b"")
+
+    class FakeExifTool(object):
+        def __init__(self):
+            self.running = True
+            self._process = FakeProcess()
+
+        def _is_pipe_io_error(self, error):
+            return ExifTool._is_pipe_io_error(self, error)
+
+    fake = FakeExifTool()
+    ExifTool.terminate(fake)
+
+    assert fake.running is False
+
+def test_execute_returns_empty_when_stdin_pipe_is_invalid():
+    class FakeStdin(object):
+        def write(self, data):
+            return len(data)
+
+        def flush(self):
+            raise OSError(22, "Invalid argument")
+
+    class FakeStdout(object):
+        def fileno(self):
+            return 0
+
+    class FakeProcess(object):
+        def __init__(self):
+            self.stdin = FakeStdin()
+            self.stdout = FakeStdout()
+
+    class FakeExifTool(object):
+        def __init__(self):
+            self.running = True
+            self._process = FakeProcess()
+
+        def _is_pipe_io_error(self, error):
+            return ExifTool._is_pipe_io_error(self, error)
+
+    fake = FakeExifTool()
+    result = ExifTool.execute(fake, b"-ver")
+
+    assert result == b""
+    assert fake.running is False
