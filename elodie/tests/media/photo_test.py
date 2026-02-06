@@ -55,6 +55,15 @@ def test_is_valid():
 
     assert photo.is_valid()
 
+def test_is_valid_raw_formats():
+    # Verify that RAW and HEIC formats are accepted even if they are not 
+    # valid images (bypassing Pillow).
+    # We use a dummy file for each extension.
+    for ext in ('arw', 'cr2', 'dng', 'heic', 'nef', 'rw2'):
+        with tempfile.NamedTemporaryFile(suffix=f'.{ext}') as ntf:
+            photo = Photo(ntf.name)
+            assert photo.is_valid(), f'Failed for extension {ext}'
+
 def test_is_not_valid():
     photo = Photo(helper.get_file('text.txt'))
 

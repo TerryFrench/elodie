@@ -94,10 +94,10 @@ class Photo(Media):
         """
         source = self.source
 
-        # HEIC is not well supported yet so we special case it.
+        # HEIC and RAW formats are not well supported by Pillow so we special case them.
         # https://github.com/python-pillow/Pillow/issues/2806
         extension = os.path.splitext(source)[1][1:].lower()
-        if(extension != 'heic'):
+        if(extension not in ('arw', 'cr2', 'dng', 'heic', 'nef', 'rw2')):
             # gh-4 This checks if the source file is an image.
             # Use Pillow to validate the image format.
             if(self.pillow is None):
