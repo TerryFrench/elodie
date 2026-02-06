@@ -1138,6 +1138,27 @@ def test_set_utime_without_exif_date():
     assert final_stat.st_mtime == time.mktime(metadata_final['date_taken']), (final_stat.st_mtime, time.mktime(metadata_final['date_taken']))
     assert initial_checksum == final_checksum
 
+@mock.patch('elodie.filesystem.os.utime', side_effect=OSError())
+@mock.patch('elodie.filesystem.time.mktime', side_effect=OverflowError())
+def test_set_utime_with_pre_epoch_date_does_not_crash(mock_mktime, mock_utime):
+    filesystem = FileSystem()
+    temporary_folder, folder = helper.create_working_folder()
+
+    origin = os.path.join(folder, 'photo.jpg')
+    shutil.copyfile(helper.get_file('plain.jpg'), origin)
+
+    metadata = {
+        'date_taken': (1960, 1, 4, 11, 22, 33, 0, 4, 0),
+        'base_name': 'photo'
+    }
+
+    filesystem.set_utime_from_metadata(metadata, origin)
+
+    shutil.rmtree(folder)
+
+    assert mock_mktime.called
+    assert mock_utime.called
+
 def test_should_exclude_with_no_exclude_arg():
     filesystem = FileSystem()
     result = filesystem.should_exclude('/some/path')
@@ -1165,7 +1186,7 @@ def test_should_exclude_with_multiple_with_one_matching_regex():
 
 def test_should_exclude_with_complex_matching_regex():
     filesystem = FileSystem()
-    result = filesystem.should_exclude('/var/folders/j9/h192v5v95gd_fhpv63qzyd1400d9ct/T/T497XPQH2R/UATR2GZZTX/2016-04-Apr/London/2016-04-07_11-15-26-valid-sample-title.txt', {re.compile('London.*\.txt$')})
+    result = filesystem.should_exclude('/var/folders/j9/h192v5v95gd_fhpv63qzyd1400d9ct/T/T497XPQH2R/UATR2GZZTX/2016-04-Apr/London/2016-04-07_11-15-26-valid-sample-title.txt', {re.compile(r'London.*\.txt$')})
     assert result == True, result
 
 @mock.patch('elodie.config.get_config_file', return_value='%s/config.ini-does-not-exist' % gettempdir())

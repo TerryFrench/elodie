@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import time
+import calendar
 from send2trash import send2trash
 
 from elodie import compatability
@@ -48,6 +49,25 @@ class FileSystem(object):
 
         # Instantiate a plugins object
         self.plugins = Plugins()
+
+    def _safe_timestamp(self, date_taken):
+        """Convert struct_time to timestamp with a pre-epoch fallback."""
+        try:
+            return time.mktime(date_taken)
+        except (OverflowError, OSError, ValueError):
+            try:
+                return calendar.timegm(date_taken)
+            except (OverflowError, OSError, ValueError, TypeError):
+                return None
+
+    def _safe_set_mtime(self, file_path, mtime):
+        """Set file mtime without crashing on unsupported timestamps."""
+        try:
+            os.utime(file_path, (time.time(), mtime))
+            return True
+        except (OverflowError, OSError, ValueError):
+            log.warn('Unable to set mtime for %s using %s' % (file_path, mtime))
+            return False
 
     def _file_operation(self, operation_type, src, dst=None):
         """Perform file operation with dry-run support."""
@@ -208,7 +228,7 @@ class FileSystem(object):
                         # This helps when re-running the program on file 
                         #  which were already processed.
                         this_value = re.sub(
-                            '^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-',
+                            r'^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-',
                             '',
                             metadata['base_name']
                         )
@@ -281,7 +301,7 @@ class FileSystem(object):
         #  name.
         #  I.e. %date-%original_name-%title.%extension => ['date', 'original_name', 'title', 'extension'] #noqa
         path_parts = re.findall(
-                         '(\%[a-z_]+)',
+                         r'(%[a-z_]+)',
                          config_file['name']
                      )
 
@@ -341,7 +361,7 @@ class FileSystem(object):
         #  I.e. %foo/%bar => ['foo', 'bar']
         #  I.e. %foo/%bar|%example|"something" => ['foo', 'bar|example|"something"']
         path_parts = re.findall(
-                         '(\%[^/]+)',
+                         r'(%[^/]+)',
                          config_directory['full_path']
                      )
 
@@ -644,7 +664,7 @@ class FileSystem(object):
         date_taken = metadata['date_taken']
         base_name = metadata['base_name']
         year_month_day_match = re.search(
-            '^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})',
+            r'^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})',
             base_name
         )
         if(year_month_day_match is not None):
@@ -654,21 +674,17 @@ class FileSystem(object):
                 '%Y-%m-%d %H:%M:%S'
             )
 
-            if not constants.dry_run:
-                #TODO Handle the case with DateTaken being before epoch
-                os.utime(file_path, (time.time(), time.mktime(date_taken)))
-            else:
-                print(f"[DRY-RUN] Would set utime from date pattern for: {file_path}")
+        date_taken_in_seconds = self._safe_timestamp(date_taken)
+        if(date_taken_in_seconds is None):
+            log.warn('Could not convert date_taken to timestamp for %s' % file_path)
+            return
+
+        if not constants.dry_run:
+            self._safe_set_mtime(file_path, date_taken_in_seconds)
+        elif year_month_day_match is not None:
+            print(f"[DRY-RUN] Would set utime from date pattern for: {file_path}")
         else:
-            # We don't make any assumptions about time zones and
-            # assume local time zone.
-            
-            #TODO Handle the case with DateTaken being before epoch
-            date_taken_in_seconds = time.mktime(date_taken)
-            if not constants.dry_run:
-                os.utime(file_path, (time.time(), (date_taken_in_seconds)))
-            else:
-                print(f"[DRY-RUN] Would set utime from metadata for: {file_path}")
+            print(f"[DRY-RUN] Would set utime from metadata for: {file_path}")
 
     def should_exclude(self, path, regex_list=set(), needs_compiled=False):
         if(len(regex_list) == 0):

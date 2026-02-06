@@ -55,7 +55,7 @@ class Photo(Media):
 
         exif = self.get_exiftool_attributes()
         if not exif:
-            return seconds_since_epoch
+            return time.gmtime(seconds_since_epoch)
 
         # We need to parse a string from EXIF into a timestamp.
         # EXIF DateTimeOriginal and EXIF DateTime are both stored
@@ -71,28 +71,10 @@ class Photo(Media):
                         dt, tm = exif[key].split(' ')
                         dt_list = compile(r'-|:').split(dt)
                         dt_list = dt_list + compile(r'-|:').split(tm)
-                        dt_list = map(int, dt_list)
-                        time_tuple = datetime(*dt_list).timetuple()
-                        
-                        #TODO Handle the case of photos with date set before epoch time. i.e. before 1970
-                        # seconds_since_epoch will be negative or invalid in some way. 
-                        # log.error("time tuple")
-                        # log.error(time_tuple)
-                        
-                        seconds_since_epoch = time.mktime(time_tuple)
-                        break
-            except OverflowError as e:
-                # time.mktime failed due to the time being before epoch time 
-                log.error("overflow error for time.mktime out of range")
-                log.error(e)
-                return None
- 
-            except ArgumentOutOfRangeException  as e:
-                # time.mktime failed due to the time being before epoch time 
-                log.error("argument for time.mktime out of range")
-                log.error(e)
-                return None
-                
+                        dt_list = list(map(int, dt_list))
+                        # Build a struct_time directly from EXIF to support
+                        # pre-epoch dates on platforms where mktime can fail.
+                        return datetime(*dt_list).utctimetuple()
             except BaseException as e:
                 log.error(e)
                 pass
