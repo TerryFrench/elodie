@@ -246,6 +246,31 @@ class ExifTool(object, with_metaclass(Singleton)):
 
         return False
 
+    def _cleanup_process(self):
+        """Reset internal process state and close any open pipe handles."""
+        process = getattr(self, "_process", None)
+        if process is not None:
+            for stream_name in ("stdin", "stdout", "stderr"):
+                stream = getattr(process, stream_name, None)
+                if stream is not None and hasattr(stream, "close"):
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+            del self._process
+        self.running = False
+
+    def _ensure_running(self):
+        """Ensure exiftool process is alive, restarting when needed."""
+        process = getattr(self, "_process", None)
+        if self.running and process is not None and process.poll() is None:
+            return True
+
+        self._cleanup_process()
+        self.start()
+        process = getattr(self, "_process", None)
+        return self.running and process is not None and process.poll() is None
+
     def start(self):
         """Start an ``exiftool`` process in batch mode for this instance.
 
@@ -273,7 +298,8 @@ class ExifTool(object, with_metaclass(Singleton)):
 
         If the subprocess isn't running, this method will do nothing.
         """
-        if not self.running:
+        if not hasattr(self, "_process"):
+            self.running = False
             return
         try:
             sent_terminate = False
@@ -292,9 +318,7 @@ class ExifTool(object, with_metaclass(Singleton)):
                 self._process.terminate()
                 self._process.communicate()
         finally:
-            if hasattr(self, "_process"):
-                del self._process
-            self.running = False
+            self._cleanup_process()
 
     def __enter__(self):
         self.start()
@@ -304,7 +328,10 @@ class ExifTool(object, with_metaclass(Singleton)):
         self.terminate()
 
     def __del__(self):
-        self.terminate()
+        try:
+            self.terminate()
+        except Exception:
+            pass
 
     def execute(self, *params):
         """Execute the given batch of parameters with ``exiftool``.
@@ -325,27 +352,32 @@ class ExifTool(object, with_metaclass(Singleton)):
         .. note:: This is considered a low-level method, and should
            rarely be needed by application developers.
         """
-        if not self.running:
+        if not self._ensure_running():
             raise ValueError("ExifTool instance not running.")
-        try:
-            self._process.stdin.write(b"\n".join(params + (b"-execute\n",)))
-            self._process.stdin.flush()
-        except (OSError, ValueError) as e:
-            if self._is_pipe_io_error(e):
-                self.running = False
+
+        for attempt in range(2):
+            try:
+                self._process.stdin.write(b"\n".join(params + (b"-execute\n",)))
+                self._process.stdin.flush()
+
+                output = b""
+                fd = self._process.stdout.fileno()
+                while not output[-32:].strip().endswith(sentinel):
+                    chunk = os.read(fd, block_size)
+                    if chunk == b"":
+                        raise OSError(errno.EPIPE, "ExifTool stdout closed unexpectedly")
+                    output += chunk
+                return output.strip()[:-len(sentinel)]
+            except (OSError, ValueError) as e:
+                if not self._is_pipe_io_error(e):
+                    raise
+                logging.warning("ExifTool pipe error during execute; restarting process.")
+                self._cleanup_process()
+                if attempt == 0 and self._ensure_running():
+                    continue
                 return b""
-            raise
-        output = b""
-        fd = self._process.stdout.fileno()
-        try:
-            while not output[-32:].strip().endswith(sentinel):
-                output += os.read(fd, block_size)
-        except OSError as e:
-            if self._is_pipe_io_error(e):
-                self.running = False
-                return b""
-            raise
-        return output.strip()[:-len(sentinel)]
+
+        return b""
 
     def execute_json(self, *params):
         """Execute the given batch of parameters and parse the JSON output.
@@ -375,10 +407,16 @@ class ExifTool(object, with_metaclass(Singleton)):
         # http://stackoverflow.com/a/5552623/1318758
         # https://github.com/jmathai/elodie/issues/127
         try:
-            return json.loads(self.execute(b"-j", *params).decode("utf-8"))
+            raw = self.execute(b"-j", *params)
+            if not raw:
+                return
+            return json.loads(raw.decode("utf-8"))
         except UnicodeDecodeError as e:
             try: 
-                return json.loads(self.execute(b"-j", *params).decode("latin-1"))
+                raw = self.execute(b"-j", *params)
+                if not raw:
+                    return
+                return json.loads(raw.decode("latin-1"))
             except UnicodeDecodeError as e:
                 # sys.stderr.write("An exception occurred: ", e) 
                 logging.critical(params)  # log exception info at CRITICAL log level                
