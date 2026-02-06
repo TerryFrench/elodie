@@ -49,3 +49,12 @@
 - Test tidying completed (separate follow-up commit):
   - Rewrote `test_various_types` in `elodie/tests/media/photo_test.py` using `pytest.mark.parametrize`.
   - Removed redundant ExifTool module-level setup in tests to avoid duplicate-start warnings from the singleton process.
+
+## Storage safety roadmap
+- Near-term option (now): keep JSON files (`hash.json`, `location.json`) but improve resilience with atomic writes and graceful interrupt handling.
+- Near-term option (opt-in): add periodic hash DB flush batching for long imports to trade durability granularity for better throughput.
+- Mid-term option: migrate hash/location state to SQLite with transactions and indexed lookups to improve crash-safety, incremental updates, and scale.
+
+## Current plan
+- Commit 1: add OS-independent graceful `SIGINT`/`Ctrl+C` handling in CLI loops (`import`, `update`, `generate-db`, `verify`) so runs stop cleanly and exit with interrupt code.
+- Commit 2: add opt-in import hash DB batching via CLI flag and switch JSON DB writes to atomic replace semantics in `localstorage.py`.
