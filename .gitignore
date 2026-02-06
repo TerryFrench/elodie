@@ -14,6 +14,7 @@ virtual_elodie_27/**
 **/*.nef
 **/*.rw2
 env/**
+.venv/**
 .coverage
 .coverage.xml
 coverage.xml
