@@ -37,6 +37,12 @@
 - CLI commands in `elodie.py`: `import`, `update`, `generate-db`, `verify`, `batch`.
 - External dependency checks are in `elodie/dependencies.py` (notably `exiftool`).
 - Configuration loading is handled via `elodie/config.py` and expects `config.ini` in the application directory.
+- Hash database behavior (`~/.elodie/hash.json` by default):
+  - Key is SHA256 of full file bytes (not just pixel data; metadata changes affect hash).
+  - Value is a single path per hash (last write wins if duplicates are imported with `--allow-duplicates`).
+  - Duplicate detection is checksum-based and destination-agnostic: if hash exists and recorded path exists, import is skipped unless `--allow-duplicates` is used.
+  - `--trash` applies only after a successful import/copy/move; skipped duplicates are not trashed.
+  - For importing into a brand-new library while keeping duplicate checks, prefer a separate app dir via `ELODIE_APPLICATION_DIRECTORY` so the run uses an isolated hash DB.
 
 ## Current tracked problems
 - `#1 Unicode filenames can crash import/update flows` (status: core fix implemented; targeted tests passing)
