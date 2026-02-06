@@ -59,7 +59,8 @@ class _GracefulInterruptHandler(object):
             log.warn('Interrupt requested. Finishing current file before stopping.')
         self.interrupted = True
 
-def import_file(_file, destination, album_from_folder, trash, allow_duplicates, location=None, time=None):
+def import_file(_file, destination, album_from_folder, trash, allow_duplicates,
+                location=None, time=None, db=None, write_db=True):
     
     _file = _decode(_file)
     destination = _decode(destination)
@@ -93,8 +94,15 @@ def import_file(_file, destination, album_from_folder, trash, allow_duplicates, 
     if time:
         update_time(media, _file, time)
 
-    dest_path = FILESYSTEM.process_file(_file, destination,
-        media, allowDuplicate=allow_duplicates, move=False)
+    dest_path = FILESYSTEM.process_file(
+        _file,
+        destination,
+        media,
+        allowDuplicate=allow_duplicates,
+        move=False,
+        db=db,
+        write_db=write_db,
+    )
     if dest_path:
         log.all('%s -> %s' % (_file, dest_path))
     if trash:
@@ -143,8 +151,11 @@ def _batch(debug, dry_run):
               help='Show what would be done without making any changes.')
 @click.option('--exclude-regex', default=set(), multiple=True,
               help='Regular expression for directories or files to exclude.')
+@click.option('--hash-db-batch-size', default=1, show_default=True,
+              type=click.IntRange(min=1),
+              help='Flush hash DB every N successful imports. 1 keeps current behavior.')
 @click.argument('paths', nargs=-1, type=click.Path())
-def _import(destination, source, file, album_from_folder, trash, allow_duplicates, location, time, debug, dry_run, exclude_regex, paths):
+def _import(destination, source, file, album_from_folder, trash, allow_duplicates, location, time, debug, dry_run, exclude_regex, hash_db_batch_size, paths):
     """Import files or directories by reading their EXIF and organizing them accordingly.
     """
     constants.debug = debug
@@ -171,6 +182,9 @@ def _import(destination, source, file, album_from_folder, trash, allow_duplicate
             exclude_regex = [value for key, value in config.items('Exclusions')]
 
     exclude_regex_list = set(exclude_regex)
+    use_hash_db_batching = hash_db_batch_size > 1
+    hash_db_pending_flush_count = 0
+    hash_db = Db() if use_hash_db_batching else None
 
     for path in paths:
         path = os.path.expanduser(path)
@@ -187,14 +201,23 @@ def _import(destination, source, file, album_from_folder, trash, allow_duplicate
                 break
 
             dest_path = import_file(current_file, destination, album_from_folder,
-                        trash, allow_duplicates, location, time)
+                        trash, allow_duplicates, location, time,
+                        db=hash_db, write_db=not use_hash_db_batching)
             if dest_path:
                 result.append((current_file, True))
+                if use_hash_db_batching:
+                    hash_db_pending_flush_count += 1
+                    if hash_db_pending_flush_count >= hash_db_batch_size:
+                        hash_db.update_hash_db()
+                        hash_db_pending_flush_count = 0
             elif not allow_duplicates:
                 result.append((current_file, None))  # duplicate
             else:
                 result.append((current_file, False))  # error
             has_errors = has_errors is True or not dest_path
+
+    if use_hash_db_batching and hash_db_pending_flush_count > 0:
+        hash_db.update_hash_db()
 
     result.write()
 

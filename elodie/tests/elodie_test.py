@@ -319,6 +319,60 @@ def test_import_file_with_multiple_exclude():
     assert 'Success                        0' in result.output, result.output
     assert 'Error                          0' in result.output, result.output
 
+def test_import_hash_db_batch_size_default_writes_per_file():
+    runner = CliRunner()
+    captured_kwargs = []
+
+    def fake_import_file(*args, **kwargs):
+        captured_kwargs.append(kwargs)
+        return '/tmp/imported-file.jpg'
+
+    with mock.patch.object(elodie, 'load_config', return_value={}):
+        with mock.patch.object(elodie, 'import_file', side_effect=fake_import_file):
+            result = runner.invoke(
+                elodie._import,
+                ['--destination', '/tmp/elodie-import', '/tmp/a.jpg']
+            )
+
+    assert result.exit_code == 0, result.output
+    assert len(captured_kwargs) == 1
+    assert captured_kwargs[0]['db'] is None
+    assert captured_kwargs[0]['write_db'] == True
+
+def test_import_hash_db_batch_size_flushes_in_batches():
+    class FakeDb(object):
+        def __init__(self):
+            self.update_calls = 0
+
+        def update_hash_db(self):
+            self.update_calls += 1
+
+    fake_db = FakeDb()
+    runner = CliRunner()
+    captured_kwargs = []
+
+    def fake_import_file(*args, **kwargs):
+        captured_kwargs.append(kwargs)
+        return '/tmp/imported-file.jpg'
+
+    with mock.patch.object(elodie, 'Db', return_value=fake_db):
+        with mock.patch.object(elodie, 'load_config', return_value={}):
+            with mock.patch.object(elodie, 'import_file', side_effect=fake_import_file):
+                result = runner.invoke(
+                    elodie._import,
+                    [
+                        '--destination', '/tmp/elodie-import',
+                        '--hash-db-batch-size', '2',
+                        '/tmp/a.jpg', '/tmp/b.jpg', '/tmp/c.jpg'
+                    ]
+                )
+
+    assert result.exit_code == 0, result.output
+    assert len(captured_kwargs) == 3
+    assert fake_db.update_calls == 2
+    assert all(kwargs['db'] is fake_db for kwargs in captured_kwargs)
+    assert all(kwargs['write_db'] == False for kwargs in captured_kwargs)
+
 def test_import_file_with_non_matching_exclude():
     temporary_folder, folder = helper.create_working_folder()
     temporary_folder_destination, folder_destination = helper.create_working_folder()

@@ -752,6 +752,34 @@ def test_process_file_plain():
     assert origin_checksum_preprocess == origin_checksum
     assert helper.path_tz_fix(os.path.join('2015-12-Dec','Unknown Location','2015-12-05_00-59-26-photo.jpg')) in destination, destination
 
+@mock.patch('elodie.filesystem.Db')
+def test_process_file_skips_hash_db_flush_when_write_db_false(mock_db):
+    filesystem = FileSystem()
+    temporary_folder, folder = helper.create_working_folder()
+
+    origin = os.path.join(folder, 'photo.jpg')
+    shutil.copyfile(helper.get_file('plain.jpg'), origin)
+
+    db_instance = mock_db.return_value
+    db_instance.checksum.return_value = 'abc123'
+    db_instance.get_hash.return_value = None
+
+    media = Photo(origin)
+    destination = filesystem.process_file(
+        origin,
+        temporary_folder,
+        media,
+        allowDuplicate=True,
+        write_db=False,
+    )
+
+    shutil.rmtree(folder)
+    shutil.rmtree(os.path.dirname(os.path.dirname(destination)))
+
+    assert destination is not None
+    assert db_instance.add_hash.called
+    assert db_instance.update_hash_db.called == False
+
 def test_process_file_with_title():
     filesystem = FileSystem()
     temporary_folder, folder = helper.create_working_folder()

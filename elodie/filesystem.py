@@ -577,6 +577,10 @@ class FileSystem(object):
         if('allowDuplicate' in kwargs):
             allow_duplicate = kwargs['allowDuplicate']
 
+        write_db = True
+        if('write_db' in kwargs):
+            write_db = kwargs['write_db']
+
         stat_info_original = os.stat(_file)
         metadata = media.get_metadata()
 
@@ -655,9 +659,10 @@ class FileSystem(object):
                 print(f"[DRY-RUN] Would set utime for: {_file}")
                 print(f"[DRY-RUN] Would set utime from metadata for: {dest_path}")
 
-        db = Db()
+        db = kwargs['db'] if 'db' in kwargs and kwargs['db'] is not None else Db()
         db.add_hash(checksum, dest_path)
-        db.update_hash_db()
+        if write_db:
+            db.update_hash_db()
 
         # Run `after()` for every loaded plugin and if any of them raise an exception
         #  then we skip importing the file and log a message.
