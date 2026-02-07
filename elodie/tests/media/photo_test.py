@@ -35,10 +35,20 @@ def test_photo_extensions():
     assert 'nef' in extensions
     assert 'png' in extensions
     assert 'rw2' in extensions
+    assert 'tif' in extensions
+    assert 'tiff' in extensions
 
     valid_extensions = Photo.get_valid_extensions()
 
     assert extensions == valid_extensions, valid_extensions
+
+@pytest.mark.parametrize('extension', ('tif', 'tiff'))
+def test_is_valid_tiff_extensions_using_pillow(extension):
+    with tempfile.NamedTemporaryFile(suffix=f'.{extension}') as ntf:
+        photo = Photo(ntf.name)
+        with patch.object(photo.pillow, 'open') as mock_open:
+            mock_open.return_value.format = 'TIFF'
+            assert photo.is_valid()
 
 def test_empty_album():
     photo = Photo(helper.get_file('plain.jpg'))
