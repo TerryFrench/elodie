@@ -30,9 +30,6 @@ config_string_fmt = config_string.format(
     secrets_file
 )
 
-setup_module = helper.setup_module
-teardown_module = helper.teardown_module
-
 @mock.patch('elodie.config.get_config_file', return_value='%s/config.ini-googlephotos-set-session' % gettempdir())
 def test_googlephotos_set_session(mock_get_config_file):
     with open(mock_get_config_file.return_value, 'w') as f:
