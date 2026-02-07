@@ -20,9 +20,6 @@ from elodie.media.photo import Photo
 
 os.environ['TZ'] = 'GMT'
 
-setup_module = helper.setup_module
-teardown_module = helper.teardown_module
-
 def test_photo_extensions():
     photo = Photo()
     extensions = photo.extensions
@@ -337,28 +334,29 @@ def test_set_title_non_ascii():
 
     assert metadata['title'] == unicode_title, metadata['title']
 
-# This is a test generator that will test reading and writing to
-# various RAW formats. Each sample file has a different date which
-# is the only information which needs to be added to run the tests
-# for that file type.
-# https://nose.readthedocs.io/en/latest/writing_tests.html#test-generators
-def test_various_types():
-    types = Photo.extensions
-    #extensions = ('arw', 'cr2', 'dng', 'gif', 'jpeg', 'jpg', 'nef', 'rw2')
-    dates = {
-        'arw': (2007, 4, 8, 17, 41, 18, 6, 98, 0),
-        'cr2': (2005, 10, 29, 16, 14, 44, 5, 302, 0),
-        'dng': (2009, 10, 20, 9, 10, 46, 1, 293, 0),
-        'heic': (2019, 5, 26, 10, 33, 20, 6, 146, 0),
-        'nef': (2008, 10, 24, 9, 12, 56, 4, 298, 0),
-        'png': (2015, 1, 18, 12, 1, 1, 6, 18, 0),
-        'rw2': (2014, 11, 19, 23, 7, 44, 2, 323, 0)
-    }
+PHOTO_TYPE_DATES = {
+    'arw': (2007, 4, 8, 17, 41, 18, 6, 98, 0),
+    'cr2': (2005, 10, 29, 16, 14, 44, 5, 302, 0),
+    'dng': (2009, 10, 20, 9, 10, 46, 1, 293, 0),
+    'heic': (2019, 5, 26, 10, 33, 20, 6, 146, 0),
+    'nef': (2008, 10, 24, 9, 12, 56, 4, 298, 0),
+    'png': (2015, 1, 18, 12, 1, 1, 6, 18, 0),
+    'rw2': (2014, 11, 19, 23, 7, 44, 2, 323, 0),
+}
 
-    for type in types:
-        if type in dates:
-            yield (_test_photo_type_get, type, dates[type])
-            yield (_test_photo_type_set, type, dates[type])
+@pytest.mark.parametrize(
+    "photo_type,date",
+    [(photo_type, date) for photo_type, date in PHOTO_TYPE_DATES.items() if photo_type in Photo.extensions],
+)
+def test_various_types_get(photo_type, date):
+    _test_photo_type_get(photo_type, date)
+
+@pytest.mark.parametrize(
+    "photo_type,date",
+    [(photo_type, date) for photo_type, date in PHOTO_TYPE_DATES.items() if photo_type in Photo.extensions],
+)
+def test_various_types_set(photo_type, date):
+    _test_photo_type_set(photo_type, date)
 
 def _test_photo_type_get(type, date):
     temporary_folder, folder = helper.create_working_folder()
@@ -381,6 +379,9 @@ def _test_photo_type_get(type, date):
 
     photo = Photo(origin)
     metadata = photo.get_metadata()
+    if metadata is None:
+        shutil.rmtree(folder)
+        pytest.skip('{} metadata unavailable on this platform'.format(type))
 
     shutil.rmtree(folder)
 
@@ -402,8 +403,14 @@ def _test_photo_type_set(type, date):
 
     photo = Photo(origin)
     origin_metadata = photo.get_metadata()
+    if origin_metadata is None:
+        shutil.rmtree(folder)
+        pytest.skip('{} metadata unavailable on this platform'.format(type))
 
     status = photo.set_location(11.1111111111, 99.9999999999)
+    if status is None:
+        shutil.rmtree(folder)
+        pytest.skip('{} location write unsupported on this platform'.format(type))
 
     assert status == True, status
 

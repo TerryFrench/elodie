@@ -23,9 +23,6 @@ from elodie.media.video import Video
 
 os.environ['TZ'] = 'GMT'
 
-setup_module = helper.setup_module
-teardown_module = helper.teardown_module
-
 def test_get_all_subclasses():
     subclasses = get_all_subclasses(Base)
     expected = {Media, Base, Text, Photo, Video, Audio}

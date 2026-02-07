@@ -69,12 +69,11 @@ def test_exiftool_with_non_ascii_file():
         os.makedirs(test_dir, exist_ok=True)
         shutil.copy2(source_file, test_file)
         
-        # This should not raise JSONDecodeError with the fix
-        with ExifTool() as et:
-            result = et.execute_json(test_file)
-            assert isinstance(result, list)
-            assert len(result) > 0
-            assert "SourceFile" in result[0]
+        # Use the test-session ExifTool process from conftest.py.
+        result = ExifTool().execute_json(test_file)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert "SourceFile" in result[0]
             
     finally:
         # Cleanup

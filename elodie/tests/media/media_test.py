@@ -21,9 +21,6 @@ from elodie.media.video import Video
 
 os.environ['TZ'] = 'GMT'
 
-setup_module = helper.setup_module
-teardown_module = helper.teardown_module
-
 def test_get_file_path():
     media = Media(helper.get_file('plain.jpg'))
     path = media.get_file_path()
